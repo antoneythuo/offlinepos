@@ -1,0 +1,88 @@
+/* Global styles — TailwindCSS base, components, and utilities */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Hide number input spinners globally ───────────────────────────────── */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] {
+  -moz-appearance: textfield;
+}
+
+/* ─── Base layer customizations ─────────────────────────────────────────── */
+@layer base {
+  /* Smooth theme transitions */
+  html {
+    @apply transition-colors duration-200;
+  }
+
+  /* Ensure all interactive elements meet 44×44px minimum touch target (Req 30.3) */
+  button,
+  [role="button"],
+  input[type="submit"],
+  input[type="button"],
+  a {
+    @apply min-h-[44px] min-w-[44px];
+  }
+
+  /* Focus ring for accessibility */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-primary-500;
+  }
+}
+
+/* ─── Component layer ────────────────────────────────────────────────────── */
+@layer components {
+  /* POS-specific button variants */
+  .btn-primary {
+    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium px-4 py-2 rounded-lg
+           min-h-[44px] min-w-[44px] transition-colors duration-150 focus-visible:ring-2
+           focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:opacity-50
+           disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600
+           text-gray-900 dark:text-gray-100 font-medium px-4 py-2 rounded-lg
+           min-h-[44px] min-w-[44px] transition-colors duration-150;
+  }
+
+  .btn-danger {
+    @apply bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg
+           min-h-[44px] min-w-[44px] transition-colors duration-150;
+  }
+
+  /* Card container */
+  .card {
+    @apply bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200
+           dark:border-gray-700 p-4;
+  }
+
+  /* Form input */
+  .input {
+    @apply w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600
+           bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
+           min-h-[44px] transition-colors duration-150;
+  }
+
+  /* Badge variants */
+  .badge-success {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+           bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200;
+  }
+
+  .badge-warning {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+           bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200;
+  }
+
+  .badge-danger {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+           bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
+  }
+}
