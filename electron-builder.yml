@@ -4,11 +4,20 @@ copyright: Copyright © 2024
 
 directories:
   buildResources: build
-  output: dist
+  output: dist-build
+
+# Disable asar — keeps files unpacked so relative paths resolve correctly
+asar: false
 
 files:
   - dist-electron/**
-  - dist/**
+  - dist-renderer/**
+
+extraResources:
+  - from: src/db/migrations
+    to: migrations
+  - from: src/db/seeds
+    to: seeds
 
 # Windows target
 win:
@@ -24,43 +33,5 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
 
-# macOS target
-mac:
-  target:
-    - target: dmg
-      arch:
-        - x64
-        - arm64
-  icon: build/icon.icns
-  category: public.app-category.business
-
-dmg:
-  contents:
-    - x: 130
-      y: 220
-    - x: 410
-      y: 220
-      type: link
-      path: /Applications
-
-# Linux target
-linux:
-  target:
-    - target: AppImage
-      arch:
-        - x64
-  icon: build/icon.png
-  category: Office
-
-# Extra resources bundled with the app
-extraResources:
-  - from: resources/
-    to: resources/
-    filter:
-      - "**/*"
-
-# Electron version to use
 electronVersion: "28.2.8"
-
-# Publish configuration (disabled for offline-first)
 publish: null

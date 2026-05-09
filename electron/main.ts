@@ -1,5 +1,8 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, shell, protocol, net } from 'electron'
 import { join } from 'path'
+import { pathToFileURL } from 'url'
+import knex from '../src/db/knex'
+import { seed } from '../src/db/seeds/01_roles_and_admin'
 
 // IPC handler registrations
 import { registerAuthHandlers } from './ipc/auth.ipc'
@@ -15,6 +18,12 @@ import { registerCustomerHandlers } from './ipc/customers.ipc'
 import { registerCreditHandlers } from './ipc/credit.ipc'
 import { registerExpenseHandlers } from './ipc/expenses.ipc'
 import { registerPrintHandlers } from './ipc/print.ipc'
+
+// Register custom app:// protocol so renderer assets resolve correctly on all platforms
+// (file:// relative paths break on Windows when loaded from deep nested paths)
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'app', privileges: { secure: true, standard: true, supportFetchAPI: true } }
+])
 
 // Prevent multiple instances
 const gotTheLock = app.requestSingleInstanceLock()
@@ -57,12 +66,29 @@ function createWindow(): void {
     // Development: load from Vite dev server
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    // Production: load from built files
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    // Production: use app:// protocol to serve renderer files
+    // This ensures relative asset paths (./assets/) resolve correctly on Windows
+    mainWindow.loadURL('app://localhost/index.html')
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Run migrations and seed on every startup — safe because both are idempotent
+  try {
+    await knex.migrate.latest()
+    await seed(knex)
+  } catch (err) {
+    console.error('DB setup failed:', err)
+  }
+
+  // Serve renderer files via app:// protocol
+  const rendererDir = join(__dirname, '../dist-renderer')
+  protocol.handle('app', (request) => {
+    const { pathname } = new URL(request.url)
+    const urlPath = pathname === '/' || pathname === '' ? 'index.html' : pathname.replace(/^\//, '')
+    return net.fetch(pathToFileURL(join(rendererDir, urlPath)).href)
+  })
+
   // Register all IPC handlers before creating the window
   registerAuthHandlers()
   registerInventoryHandlers()
@@ -81,7 +107,6 @@ app.whenReady().then(() => {
   createWindow()
 
   app.on('activate', () => {
-    // On macOS, re-create window when dock icon is clicked and no windows are open
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow()
     }
@@ -89,14 +114,12 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  // On macOS, keep app running until explicitly quit
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
 
 app.on('second-instance', () => {
-  // Focus the existing window if a second instance is launched
   if (mainWindow) {
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.focus()

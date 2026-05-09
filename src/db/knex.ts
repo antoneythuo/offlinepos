@@ -74,6 +74,16 @@ export function loadDbConfig(
  * Extracted so that LAN mode can create a new instance with different host/port.
  */
 export function createKnexInstance(config: DbConfig): Knex.Knex {
+  // In production (packaged app), migrations/seeds are in extraResources next to the app.
+  // In development, they live in src/db/migrations and src/db/seeds.
+  const isPackaged = !process.env['ELECTRON_RENDERER_URL'] && require('electron')?.app?.isPackaged
+  const migrationsDir = isPackaged
+    ? join(process.resourcesPath, 'migrations')
+    : join(__dirname, 'migrations')
+  const seedsDir = isPackaged
+    ? join(process.resourcesPath, 'seeds')
+    : join(__dirname, 'seeds')
+
   return Knex({
     client: 'mysql2',
     connection: {
@@ -88,16 +98,17 @@ export function createKnexInstance(config: DbConfig): Knex.Knex {
     pool: {
       min: 2,
       max: 10,
-      // Release idle connections after 30 seconds
       idleTimeoutMillis: 30_000
     },
     migrations: {
-      directory: join(__dirname, 'migrations'),
-      extension: 'ts'
+      directory: migrationsDir,
+      extension: 'js',
+      loadExtensions: ['.js', '.ts']
     },
     seeds: {
-      directory: join(__dirname, 'seeds'),
-      extension: 'ts'
+      directory: seedsDir,
+      extension: 'js',
+      loadExtensions: ['.js', '.ts']
     },
     debug: process.env.NODE_ENV === 'development'
   })
