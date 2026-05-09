@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sequence Lounge POS — Deployment Guide</title>
+<style>
+  :root {
+    --bg: #0f172a; --surface: #1e293b; --border: #334155;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #3b82f6;
+    --green: #22c55e; --amber: #f59e0b; --red: #ef4444;
+    --code-bg: #0f172a; --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 15px; line-height: 1.7; }
+  a { color: var(--accent); }
+
+  /* Layout */
+  .layout { display: flex; min-height: 100vh; }
+  nav { width: 260px; background: var(--surface); border-right: 1px solid var(--border); padding: 24px 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; flex-shrink: 0; }
+  main { flex: 1; padding: 48px 56px; max-width: 860px; }
+
+  /* Nav */
+  .nav-logo { padding: 0 24px 24px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+  .nav-logo h1 { font-size: 15px; font-weight: 700; color: var(--text); }
+  .nav-logo p { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  nav ul { list-style: none; }
+  nav ul li a { display: block; padding: 8px 24px; font-size: 13px; color: var(--muted); text-decoration: none; border-left: 3px solid transparent; transition: all .15s; }
+  nav ul li a:hover, nav ul li a.active { color: var(--text); background: rgba(59,130,246,.08); border-left-color: var(--accent); }
+  nav ul li.section-head { padding: 16px 24px 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+
+  /* Content */
+  h1.page-title { font-size: 28px; font-weight: 800; margin-bottom: 6px; }
+  .subtitle { color: var(--muted); margin-bottom: 40px; font-size: 15px; }
+  section { margin-bottom: 56px; scroll-margin-top: 32px; }
+  h2 { font-size: 20px; font-weight: 700; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  h2 .num { background: var(--accent); color: #fff; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  h3 { font-size: 15px; font-weight: 600; margin: 20px 0 8px; color: var(--text); }
+  p { color: var(--muted); margin-bottom: 12px; }
+  ul, ol { padding-left: 20px; color: var(--muted); margin-bottom: 12px; }
+  li { margin-bottom: 4px; }
+  strong { color: var(--text); font-weight: 600; }
+
+  /* Code blocks */
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; overflow-x: auto; margin: 12px 0 20px; position: relative; }
+  code { font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 13px; color: #7dd3fc; }
+  pre code { color: #e2e8f0; }
+  .copy-btn { position: absolute; top: 10px; right: 10px; background: var(--border); border: none; color: var(--muted); padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer; transition: all .15s; }
+  .copy-btn:hover { background: var(--accent); color: #fff; }
+  .copy-btn.copied { background: var(--green); color: #fff; }
+  inline-code, .ic { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; font-family: 'Cascadia Code', monospace; font-size: 13px; color: #7dd3fc; }
+
+  /* Callouts */
+  .callout { border-radius: var(--radius); padding: 14px 18px; margin: 16px 0; border-left: 4px solid; }
+  .callout.info { background: rgba(59,130,246,.08); border-color: var(--accent); }
+  .callout.warn { background: rgba(245,158,11,.08); border-color: var(--amber); }
+  .callout.success { background: rgba(34,197,94,.08); border-color: var(--green); }
+  .callout p { margin: 0; font-size: 14px; }
+  .callout.info p { color: #93c5fd; }
+  .callout.warn p { color: #fcd34d; }
+  .callout.success p { color: #86efac; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+  th { background: var(--surface); color: var(--text); font-weight: 600; text-align: left; padding: 10px 14px; border-bottom: 2px solid var(--border); }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--muted); }
+  td:first-child { color: var(--text); font-weight: 500; }
+  tr:last-child td { border-bottom: none; }
+
+  /* Credential cards */
+  .cred-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin: 16px 0; }
+  .cred-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .cred-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 4px; }
+  .cred-card .value { font-family: 'Cascadia Code', monospace; font-size: 15px; font-weight: 700; color: var(--accent); }
+
+  /* Step badges */
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li { counter-increment: step; padding: 12px 0 12px 52px; position: relative; border-bottom: 1px solid var(--border); }
+  .steps li:last-child { border-bottom: none; }
+  .steps li::before { content: counter(step); position: absolute; left: 0; top: 12px; width: 32px; height: 32px; background: var(--accent); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+  .steps li strong { display: block; color: var(--text); margin-bottom: 4px; }
+
+  /* Badge */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge.required { background: rgba(239,68,68,.15); color: #fca5a5; }
+  .badge.optional { background: rgba(148,163,184,.1); color: var(--muted); }
+
+  @media (max-width: 768px) {
+    .layout { flex-direction: column; }
+    nav { width: 100%; height: auto; position: static; }
+    main { padding: 24px 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- Sidebar -->
+<nav>
+  <div class="nav-logo">
+    <h1>🧾 Sequence Lounge POS</h1>
+    <p>Deployment Guide</p>
+  </div>
+  <ul>
+    <li class="section-head">Getting Started</li>
+    <li><a href="#prerequisites">Prerequisites</a></li>
+    <li><a href="#project-setup">Project Setup</a></li>
+    <li class="section-head">Build &amp; Install</li>
+    <li><a href="#build">Build the Installer</a></li>
+    <li><a href="#install">Install the App</a></li>
+    <li class="section-head">Operations</li>
+    <li><a href="#mysql">MySQL Auto-Start</a></li>
+    <li><a href="#updates">Updating the App</a></li>
+    <li><a href="#troubleshooting">Troubleshooting</a></li>
+    <li class="section-head">Reference</li>
+    <li><a href="#credentials">Default Credentials</a></li>
+    <li><a href="#commands">Quick Commands</a></li>
+  </ul>
+</nav>
+
+<!-- Main content -->
+<main>
+  <h1 class="page-title">Deployment Guide</h1>
+  <p class="subtitle">Step-by-step setup for a new computer — from zero to a clickable desktop app.</p>
+
+  <!-- PREREQUISITES -->
+  <section id="prerequisites">
+    <h2><span class="num">1</span> Prerequisites</h2>
+    <p>Install these once on every machine that will run the POS system.</p>
+
+    <h3>Node.js 20 LTS <span class="badge required">Required</span></h3>
+    <p>Download the Windows Installer (.msi) from <a href="https://nodejs.org" target="_blank">nodejs.org</a> — choose the <strong>LTS</strong> version. Accept all defaults.</p>
+    <p>Verify the installation by opening Command Prompt and running:</p>
+    <pre><button class="copy-btn" onclick="copyCode(this)">Copy</button><code>node -v
+npm -v</code></pre>
+    <p>Both commands should print version numbers.</p>
+
+    <h3>MySQL 8.x <span class="badge required">Required</span></h3>
+    <p>Download <strong>MySQL Installer for Windows</strong> from <a href="https://dev.mysql.com/downloads/installer/" target="_blank">dev.mysql.com</a>. During setup choose <strong>Server Only</strong> or <strong>Developer Default</strong>. Set a root password and keep port <strong>3306</strong>.</p>
+    <p>After installation, open <strong>MySQL Command Line Client</strong> and run:</p>
+    <pre><button class="copy-btn" onclick="copyCode(this)">Copy</button><code>CREATE DATABASE pos_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'pos_user'@'localhost' IDENTIFIED BY 'pos_password';
+GRANT ALL PRIVILEGES ON pos_db.* TO 'pos_user'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;</code></pre>
+    <div class="callout warn"><p>⚠️ If you use a different username or password, remember to update <code>config.json</code> in the next step.</p></div>
+  </section>
+
+  <!-- PROJECT SETUP -->
+  <section id="project-setup">
+    <h2><span class="num">2</span> Project Setup</h2>
+
+    <ol class="steps">
+      <li>
+        <strong>Copy the project folder</strong>
+        Copy the entire <code>offline-pos-system</code> folder to the target machine, for example to <code>C:\POS\offline-pos-system\</code>
+      </li>
+      <li>
+        <strong>Create config.json</strong>
+        Open Command Prompt, navigate to the project folder and copy the example config:
+        <pre><button class="copy-btn" onclick="copyCode(this)">Copy</button><code>cd C:\POS\offline-pos-system
+copy config.example.json config.json</code></pre>
+        Open <code>config.json</code> and confirm the values match your MySQL setup:
+        <pre><button class="copy-btn" onclick="copyCode(this)">Copy</button><code>{
+  "database": {
+    "host": "127.0.0.1",
+    "port": 3306,
+    "user": "pos_user",
+    "password": "pos_password",
+    "database": "pos_db"
+  }
+}</code></pre>
+      </li>
+      <li>
+        <strong>Install dependencies</strong>
+        <pre><button class="copy-btn" onclick="copyCode(this)">Copy</button><code>npm install</code></pre>
+        This downloads all required packages. Takes 3–5 minutes on first run.
+      </li>
+      <li>
+        <strong>Run database migrations</strong>
+        <pre><button class="copy-btn" onclick="copyCode(this)">Copy</button><code>npx knex migrate:latest --knexfile knexfile.ts</code></pre>
+        Creates all 27 database tables.
+      </li>
+      <li>
+        <strong>Seed default data</strong>
+        <pre><button class="copy-btn" onclick="copyCode(this)">Copy</button><code>npx knex seed:run --knexfile knexfile.ts</code></pre>
+        Inserts default roles, admin user, General category, Piece unit, and all default settings.
+      </li>
+    </ol>
+
+    <div class="callout success"><p>✅ At this point you can test the app with <code>npm run dev</code> before building the installer.</p></div>
+  </section>
+
+  <!-- BUILD -->
+  <section id="build">
+    <h2><span class="num">3</span> Build the Installer</h2>
+    <p>This compiles all code and packages it into a Windows <code>.exe</code> installer — no Command Prompt needed to run the final app.</p>
+
+    <h3>Optional: Add an app icon</h3>
+    <p>Create a <code>build</code> folder inside the project and place a <code>icon.ico</code> file (256×256 px) inside it. Skip this step to use the default Electron icon.</p>
+    <pre><button class="copy-btn" onclick="copyCode(this)">Copy</button><code>mkdir C:\POS\offline-pos-system\build</code></pre>
+
+    <h3>Run the build</h3>
+    <pre><button class="copy-btn" onclick="copyCode(this)">Copy</button><code>cd C:\POS\offline-pos-system
+npm run dist</code></pre>
+    <p>This takes 5–15 minutes. When complete, the installer is at:</p>
+    <pre><code>C:\POS\offline-pos-system\dist\Offline POS System Setup 1.0.0.exe</code></pre>
+
+    <div class="callout info"><p>ℹ️ The build process runs <code>electron-vite build</code> then <code>electron-builder</code> automatically. You don't need to run them separately.</p></div>
+  </section>
+
+  <!-- INSTALL -->
+  <section id="install">
+    <h2><span class="num">4</span> Install the Application</h2>
+    <p>Double-click <code>Offline POS System Setup 1.0.0.exe</code>. The installer will:</p>
+    <ul>
+      <li>Ask where to install (default: <code>C:\Program Files\Offline POS System\</code>)</li>
+      <li>Create a <strong>Desktop shortcut</strong></li>
+      <li>Create a <strong>Start Menu entry</strong></li>
+      <li>Register the app for uninstall via Windows Settings → Apps</li>
+    </ul>
+    <p>After installation, launch the app from the <strong>desktop shortcut</strong> or <strong>Start Menu</strong>. No Command Prompt required.</p>
+    <div class="callout warn"><p>⚠️ MySQL must be running before you open the app. See the next section to make it start automatically on boot.</p></div>
+  </section>
+
+  <!-- MYSQL AUTO-START -->
+  <section id="mysql">
+    <h2><span class="num">5</span> MySQL Auto-Start on Boot</h2>
+    <p>MySQL should start automatically when Windows boots. To verify and configure this:</p>
+    <ol>
+      <li>Press <strong>Win + R</strong>, type <code>services.msc</code>, press Enter</li>
+      <li>Find <strong>MySQL80</strong> in the list</li>
+      <li>Check that its status is <strong>Running</strong></li>
+      <li>If not running: right-click → <strong>Start</strong></li>
+      <li>To ensure it starts on boot: right-click → <strong>Properties</strong> → Startup type → <strong>Automatic</strong></li>
+    </ol>
+    <div class="callout success"><p>✅ Once set to Automatic, MySQL will start silently every time Windows boots — the POS app will always be able to connect.</p></div>
+  </section>
+
+  <!-- UPDATES -->
+  <section id="updates">
+    <h2><span class="num">6</span> Updating the App</h2>
+    <p>When you receive an updated version of the source code:</p>
+    <ol>
+      <li>Replace the project files in <code>C:\POS\offline-pos-system\</code></li>
+      <li>Run the following commands:
+        <pre><button class="copy-btn" onclick="copyCode(this)">Copy</button><code>cd C:\POS\offline-pos-system
+npm install
+npx knex migrate:latest --knexfile knexfile.ts
+npm run dist</code></pre>
+      </li>
+      <li>Run the new installer from the <code>dist\</code> folder — it will update the existing installation.</li>
+    </ol>
+    <div class="callout info"><p>ℹ️ Migrations are safe to run multiple times. They only apply changes that haven't been applied yet — your data is never deleted.</p></div>
+  </section>
+
+  <!-- TROUBLESHOOTING -->
+  <section id="troubleshooting">
+    <h2><span class="num">7</span> Troubleshooting</h2>
+    <table>
+      <thead><tr><th>Problem</th><th>Solution</th></tr></thead>
+      <tbody>
+        <tr><td>App opens but shows "Unable to connect"</td><td>MySQL is not running. Open services.msc and start MySQL80.</td></tr>
+        <tr><td>"Access denied for user" error</td><td>Check that <code>config.json</code> credentials match your MySQL user.</td></tr>
+        <tr><td>Blank white screen on launch</td><td>Open DevTools (Ctrl+Shift+I) and check the Console tab for errors.</td></tr>
+        <tr><td>Build fails with "icon not found"</td><td>Remove the <code>icon:</code> lines from <code>electron-builder.yml</code> or add a valid <code>build/icon.ico</code> file.</td></tr>
+        <tr><td><code>npm install</code> fails</td><td>Ensure Node.js 20 is installed and you have internet access during setup.</td></tr>
+        <tr><td>Port 3306 already in use</td><td>Another MySQL instance is running. Stop it or change the port in <code>config.json</code>.</td></tr>
+        <tr><td>Migration fails with "Table already exists"</td><td>Safe to ignore — migrations are idempotent. Run <code>migrate:latest</code> again.</td></tr>
+        <tr><td>Print dialog doesn't open</td><td>Ensure a printer is installed in Windows. The app uses the system print dialog.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- CREDENTIALS -->
+  <section id="credentials">
+    <h2><span class="num">8</span> Default Credentials</h2>
+    <div class="callout warn"><p>⚠️ Change the admin PIN immediately after first login via Settings → Users &amp; Roles.</p></div>
+    <div class="cred-grid">
+      <div class="cred-card"><div class="label">Username</div><div class="value">admin</div></div>
+      <div class="cred-card"><div class="label">PIN</div><div class="value">1234</div></div>
+      <div class="cred-card"><div class="label">Database</div><div class="value">pos_db</div></div>
+      <div class="cred-card"><div class="label">DB User</div><div class="value">pos_user</div></div>
+      <div class="cred-card"><div class="label">DB Password</div><div class="value">pos_password</div></div>
+      <div class="cred-card"><div class="label">DB Port</div><div class="value">3306</div></div>
+    </div>
+  </section>
+
+  <!-- COMMANDS -->
+  <section id="commands">
+    <h2><span class="num">9</span> Quick Reference Commands</h2>
+    <table>
+      <thead><tr><th>Task</th><th>Command</th></tr></thead>
+      <tbody>
+        <tr><td>Test in development mode</td><td><code>npm run dev</code></td></tr>
+        <tr><td>Build production installer</td><td><code>npm run dist</code></td></tr>
+        <tr><td>Run database migrations</td><td><code>npx knex migrate:latest --knexfile knexfile.ts</code></td></tr>
+        <tr><td>Seed default data</td><td><code>npx knex seed:run --knexfile knexfile.ts</code></td></tr>
+        <tr><td>Run tests</td><td><code>npm test</code></td></tr>
+        <tr><td>Type check</td><td><code>npm run typecheck</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+</main>
+</div>
+
+<script>
+  // Copy button
+  function copyCode(btn) {
+    const pre = btn.parentElement
+    const code = pre.querySelector('code').innerText
+    navigator.clipboard.writeText(code).then(() => {
+      btn.textContent = 'Copied!'
+      btn.classList.add('copied')
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied') }, 2000)
+    })
+  }
+
+  // Active nav link on scroll
+  const sections = document.querySelectorAll('section[id]')
+  const navLinks = document.querySelectorAll('nav a')
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navLinks.forEach(a => a.classList.remove('active'))
+        const active = document.querySelector(`nav a[href="#${e.target.id}"]`)
+        if (active) active.classList.add('active')
+      }
+    })
+  }, { rootMargin: '-30% 0px -60% 0px' })
+  sections.forEach(s => observer.observe(s))
+</script>
+</body>
+</html>
