@@ -13,7 +13,7 @@ export interface AdjustPayload {
   productId: number
   type: 'damaged' | 'lost' | 'returned' | 'correction'
   quantity: number       // positive = add stock, negative = remove stock
-  reason: string
+  reason?: string
   userId: number
   forceNegative?: boolean  // if true, allow the result to go below zero
 }

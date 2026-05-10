@@ -67,9 +67,7 @@ export default function StockAdjustmentModal({ product, onClose, onSaved }: Stoc
     if (!quantity.trim() || isNaN(qty)) {
       errs.quantity = 'Quantity is required'
     }
-    if (!reason.trim()) {
-      errs.reason = 'Reason is required'
-    }
+    // reason is optional
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -85,8 +83,8 @@ export default function StockAdjustmentModal({ product, onClose, onSaved }: Stoc
           type: adjustmentType,
           quantity: parseFloat(quantity),
           reason: reason.trim(),
-          adjustedBy: currentUser?.id,
-          force,
+          userId: currentUser?.id,
+          forceNegative: force,
         }
       )
 
@@ -237,7 +235,7 @@ export default function StockAdjustmentModal({ product, onClose, onSaved }: Stoc
             {/* Reason */}
             <div>
               <label htmlFor="adj-reason" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Reason <span className="text-red-500" aria-hidden="true">*</span>
+                Reason
               </label>
               <textarea
                 id="adj-reason"

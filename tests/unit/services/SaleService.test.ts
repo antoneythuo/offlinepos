@@ -13,6 +13,7 @@ const CART_ITEM: CartItem = {
   productName: 'Widget A',
   sku: 'WGT-001',
   quantity: 2,
+  stockQuantity: 100,
   unitPrice: 100,
   discountType: 'none',
   discountValue: 0,

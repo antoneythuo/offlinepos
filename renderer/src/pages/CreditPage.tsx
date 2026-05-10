@@ -221,6 +221,7 @@ export default function CreditPage(): React.ReactElement {
   const [paymentTarget, setPaymentTarget] = useState<Transaction | null>(null)
   const [statementTarget, setStatementTarget] = useState<Customer | null>(null)
   const [detailTarget, setDetailTarget] = useState<Transaction | null>(null)
+  const [printingCustomer, setPrintingCustomer] = useState<string | null>(null)
 
   // Search / filter
   const [query, setQuery] = useState('')
@@ -293,6 +294,76 @@ export default function CreditPage(): React.ReactElement {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {}, 300)
   }
+
+  // ── Print combined receipt for a single customer ────────────────────────
+  const handlePrintCustomerDebt = useCallback(async (customerName: string, txList: Transaction[]) => {
+    setPrintingCustomer(customerName)
+    try {
+      const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+      // Fetch items for all this customer's transactions in parallel
+      const itemsMap = new Map<number, ReceiptLineItem[]>()
+      await Promise.all(
+        txList.map(async (tx) => {
+          const r = await window.api.invoke<IpcResult<ReceiptLineItem[]>>(
+            'sales:transaction:items', { transactionId: tx.id }
+          )
+          if (r.success) itemsMap.set(tx.id, r.data)
+        })
+      )
+
+      // Flatten all items, merging duplicates by product name
+      const merged = new Map<string, { productName: string; quantity: number; lineTotal: number }>()
+      for (const items of itemsMap.values()) {
+        for (const item of items) {
+          const existing = merged.get(item.productName)
+          if (existing) {
+            existing.quantity += item.quantity
+            existing.lineTotal += item.lineTotal
+          } else {
+            merged.set(item.productName, { productName: item.productName, quantity: item.quantity, lineTotal: item.lineTotal })
+          }
+        }
+      }
+
+      const totalDebt = txList.reduce((sum, tx) => sum + (tx.creditBalance ?? tx.grandTotal), 0)
+
+      let html = `
+        <p style="text-align:center;font-weight:bold;font-size:15px;margin-bottom:2px">DEBT RECEIPT</p>
+        <p style="text-align:center;font-size:10px;margin-bottom:4px">${new Date().toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+        <hr style="border:none;border-top:1px dashed #000;margin:5px 0">
+        <div style="display:flex;justify-content:space-between;margin:2px 0;font-size:11px">
+          <span>Customer</span><span style="font-weight:bold">${customerName}</span>
+        </div>
+        <hr style="border:none;border-top:1px dashed #000;margin:5px 0">
+        <p style="font-weight:bold;font-size:10px;text-transform:uppercase;margin-bottom:4px">ITEMS</p>
+      `
+
+      for (const item of merged.values()) {
+        html += `
+          <div style="display:flex;justify-content:space-between;margin:2px 0;font-size:10px">
+            <span style="flex:1;padding-right:6px">${item.productName} ×${item.quantity}</span>
+            <span style="font-weight:bold">${fmt(item.lineTotal)}</span>
+          </div>
+        `
+      }
+
+      html += `
+        <hr style="border:none;border-top:1px dashed #000;margin:5px 0">
+        <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:13px;margin:3px 0">
+          <span>TOTAL DUE</span><span style="color:#c00">${fmt(totalDebt)}</span>
+        </div>
+        <hr style="border:none;border-top:1px dashed #000;margin:6px 0 3px">
+        <p style="text-align:center;font-size:10px">Please settle your outstanding balance.</p>
+      `
+
+      await window.api.invoke('print:html', { html })
+    } catch {
+      // silently ignore
+    } finally {
+      setPrintingCustomer(null)
+    }
+  }, [])
 
   // ── After payment recorded ───────────────────────────────────────────────
   function handlePaid(balance: CreditBalance) {
@@ -444,98 +515,130 @@ export default function CreditPage(): React.ReactElement {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {filtered.map((tx) => {
-                  const overdue = isOverdue(tx)
-                  const dueSoon = !overdue && isDueSoon(tx)
-                  return (
-                    <tr
-                      key={tx.id}
-                      className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
-                    >
-                      {/* Customer (global view only) */}
-                      {!customerIdFilter && (
-                        <td className="px-4 py-3 text-gray-900 dark:text-gray-100 font-medium whitespace-nowrap">
-                          {tx.customerName ?? '—'}
-                        </td>
-                      )}
+                {(() => {
+                  // Count how many times each customer appears in the filtered list
+                  const customerCounts = new Map<string, number>()
+                  const customerTxMap = new Map<string, Transaction[]>()
+                  for (const tx of filtered) {
+                    const key = tx.customerName ?? 'Unknown'
+                    customerCounts.set(key, (customerCounts.get(key) ?? 0) + 1)
+                    if (!customerTxMap.has(key)) customerTxMap.set(key, [])
+                    customerTxMap.get(key)!.push(tx)
+                  }
+                  // Track which customers have already had their "Print All" button shown
+                  const printAllShown = new Set<string>()
 
-                      {/* Ref */}
-                      <td className="px-4 py-3 font-mono text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                        {tx.transactionRef}
-                      </td>
+                  return filtered.map((tx) => {
+                    const overdue = isOverdue(tx)
+                    const dueSoon = !overdue && isDueSoon(tx)
+                    const customerKey = tx.customerName ?? 'Unknown'
+                    const hasMultiple = (customerCounts.get(customerKey) ?? 0) > 1
+                    const showPrintAll = hasMultiple && !printAllShown.has(customerKey)
+                    if (showPrintAll) printAllShown.add(customerKey)
 
-                      {/* Date */}
-                      <td className="px-4 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                        {formatDate(tx.createdAt)}
-                      </td>
-
-                      {/* Amount */}
-                      <td className="px-4 py-3 text-right text-gray-900 dark:text-gray-100 font-medium whitespace-nowrap">
-                        {formatAmount(tx.grandTotal)}
-                      </td>
-
-                      {/* Balance */}
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <span className="font-semibold text-red-600 dark:text-red-400">
-                          {formatAmount(tx.creditBalance ?? tx.grandTotal)}
-                        </span>
-                      </td>
-
-                      {/* Due Date */}
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {tx.creditDueDate ? (
-                          <span className={`inline-flex items-center gap-1 text-sm ${
-                            overdue
-                              ? 'text-red-600 dark:text-red-400 font-semibold'
-                              : dueSoon
-                              ? 'text-amber-600 dark:text-amber-400 font-medium'
-                              : 'text-gray-600 dark:text-gray-400'
-                          }`}>
-                            {overdue && (
-                              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                              </svg>
-                            )}
-                            {formatDate(tx.creditDueDate)}
-                            {overdue && <span className="text-xs">(Overdue)</span>}
-                            {dueSoon && <span className="text-xs">(Due soon)</span>}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400 dark:text-gray-500">—</span>
+                    return (
+                      <tr
+                        key={tx.id}
+                        className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
+                      >
+                        {/* Customer (global view only) */}
+                        {!customerIdFilter && (
+                          <td className="px-4 py-3 text-gray-900 dark:text-gray-100 font-medium whitespace-nowrap">
+                            {tx.customerName ?? '—'}
+                          </td>
                         )}
-                      </td>
 
-                      {/* Actions */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-center gap-1">
-                          {/* View items */}
-                          <ActionBtn
-                            onClick={() => setDetailTarget(tx)}
-                            title="View items & print"
-                            className="bg-blue-600 hover:bg-blue-700 text-white text-xs"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                            View
-                          </ActionBtn>
-                          {/* Pay */}
-                          <ActionBtn
-                            onClick={() => setPaymentTarget(tx)}
-                            title="Record payment"
-                            className="bg-green-600 hover:bg-green-700 text-white text-xs"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
-                            </svg>
-                            Pay
-                          </ActionBtn>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
+                        {/* Ref */}
+                        <td className="px-4 py-3 font-mono text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                          {tx.transactionRef}
+                        </td>
+
+                        {/* Date */}
+                        <td className="px-4 py-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                          {formatDate(tx.createdAt)}
+                        </td>
+
+                        {/* Amount */}
+                        <td className="px-4 py-3 text-right text-gray-900 dark:text-gray-100 font-medium whitespace-nowrap">
+                          {formatAmount(tx.grandTotal)}
+                        </td>
+
+                        {/* Balance */}
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          <span className="font-semibold text-red-600 dark:text-red-400">
+                            {formatAmount(tx.creditBalance ?? tx.grandTotal)}
+                          </span>
+                        </td>
+
+                        {/* Due Date */}
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {tx.creditDueDate ? (
+                            <span className={`inline-flex items-center gap-1 text-sm ${
+                              overdue
+                                ? 'text-red-600 dark:text-red-400 font-semibold'
+                                : dueSoon
+                                ? 'text-amber-600 dark:text-amber-400 font-medium'
+                                : 'text-gray-600 dark:text-gray-400'
+                            }`}>
+                              {overdue && (
+                                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                  <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                              {formatDate(tx.creditDueDate)}
+                              {overdue && <span className="text-xs">(Overdue)</span>}
+                              {dueSoon && <span className="text-xs">(Due soon)</span>}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 dark:text-gray-500">—</span>
+                          )}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-center gap-1">
+                            {/* View items */}
+                            <ActionBtn
+                              onClick={() => setDetailTarget(tx)}
+                              title="View items & print"
+                              className="bg-blue-600 hover:bg-blue-700 text-white text-xs"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              </svg>
+                              View
+                            </ActionBtn>
+                            {/* Pay */}
+                            <ActionBtn
+                              onClick={() => setPaymentTarget(tx)}
+                              title="Record payment"
+                              className="bg-green-600 hover:bg-green-700 text-white text-xs"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+                              </svg>
+                              Pay
+                            </ActionBtn>
+                            {/* Print All — only on first row of customers with multiple transactions */}
+                            {showPrintAll && (
+                              <ActionBtn
+                                onClick={() => handlePrintCustomerDebt(customerKey, customerTxMap.get(customerKey)!)}
+                                title={`Print all debt for ${customerKey}`}
+                                className="bg-purple-600 hover:bg-purple-700 text-white text-xs disabled:opacity-50"
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                </svg>
+                                {printingCustomer === customerKey ? '…' : 'Print All'}
+                              </ActionBtn>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                })()}
               </tbody>
             </table>
           </div>

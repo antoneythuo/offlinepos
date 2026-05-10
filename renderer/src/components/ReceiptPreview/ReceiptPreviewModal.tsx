@@ -1,6 +1,6 @@
 // ReceiptPreviewModal — POS thermal receipt design (80mm width)
 
-import React, { useState, useCallback, useEffect, useRef } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import type { IpcResult, ReceiptData } from '../../../../src/types'
 
 function fmt(n: number): string {
@@ -29,7 +29,6 @@ interface ReceiptPreviewModalProps {
 export default function ReceiptPreviewModal({ receiptData, onClose }: ReceiptPreviewModalProps): React.ReactElement | null {
   const [isPrinting, setIsPrinting] = useState(false)
   const [printError, setPrintError] = useState<string | null>(null)
-  const receiptRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (receiptData) { setIsPrinting(false); setPrintError(null) }
@@ -43,12 +42,73 @@ export default function ReceiptPreviewModal({ receiptData, onClose }: ReceiptPre
   }, [receiptData, onClose])
 
   const handlePrint = useCallback(async () => {
-    if (!receiptData || !receiptRef.current) return
+    if (!receiptData) return
     setIsPrinting(true)
     setPrintError(null)
 
     try {
-      const html = receiptRef.current.innerHTML
+      const fmt2 = (n: number) => n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      const fmtM = (m: string) => m === 'cash' ? 'Cash' : m === 'card' ? 'Card' : 'M-Money'
+
+      const lines: string[] = []
+      const row = (l: string, r: string) =>
+        `<div style="display:flex;justify-content:space-between;margin:2px 0"><span>${l}</span><span>${r}</span></div>`
+
+      if (receiptData.receiptHeader)
+        lines.push(`<p style="text-align:center;font-size:10px;margin-bottom:4px">${receiptData.receiptHeader}</p>`)
+
+      lines.push(`<p style="text-align:center;font-weight:bold;font-size:16px;margin-bottom:2px">${receiptData.businessName}</p>`)
+
+      if (receiptData.businessAddress)
+        lines.push(`<p style="text-align:center;font-size:10px;margin-bottom:4px">${receiptData.businessAddress}</p>`)
+
+      if (receiptData.isDuplicate)
+        lines.push(`<p style="text-align:center;font-weight:bold;font-size:12px;border:1px solid #000;padding:2px;margin:4px 0">*** DUPLICATE ***</p>`)
+
+      lines.push(`<hr style="border:none;border-top:1px dashed #000;margin:6px 0">`)
+      lines.push(row('Ref #', `<strong>${receiptData.transactionRef}</strong>`))
+      lines.push(row('Date', fmtDate(receiptData.dateTime)))
+      lines.push(row('Cashier', `<strong>${receiptData.cashierName}</strong>`))
+      if (receiptData.customerName)
+        lines.push(row('Customer', receiptData.customerName))
+
+      lines.push(`<hr style="border:none;border-top:1px dashed #000;margin:6px 0">`)
+      lines.push(`<p style="font-weight:bold;font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">ITEMS</p>`)
+
+      for (const item of receiptData.items) {
+        lines.push(`
+          <div style="margin-bottom:5px">
+            <div style="display:flex;justify-content:space-between">
+              <span style="font-weight:bold;flex:1;padding-right:8px">${item.productName}</span>
+              <span style="font-weight:bold;white-space:nowrap">${fmt2(item.lineTotal)}</span>
+            </div>
+            <div style="font-size:10px;color:#444">
+              ${item.quantity} &times; ${fmt2(item.unitPrice)}${item.discountAmount > 0 ? ` &nbsp; disc &minus;${fmt2(item.discountAmount)}` : ''}
+            </div>
+          </div>`)
+      }
+
+      lines.push(`<hr style="border:none;border-top:1px dashed #000;margin:6px 0">`)
+      lines.push(row('Subtotal', fmt2(receiptData.subtotal)))
+      if (receiptData.discountAmount > 0)
+        lines.push(row('Discount', `&minus;${fmt2(receiptData.discountAmount)}`))
+      if (receiptData.taxAmount > 0)
+        lines.push(row('Tax', fmt2(receiptData.taxAmount)))
+
+      lines.push(`<hr style="border:none;border-top:1px dashed #000;margin:6px 0">`)
+      lines.push(`<div style="display:flex;justify-content:space-between;font-weight:bold;font-size:14px;margin:4px 0"><span>TOTAL</span><span>${fmt2(receiptData.grandTotal)}</span></div>`)
+      lines.push(`<hr style="border:none;border-top:1px dashed #000;margin:6px 0">`)
+
+      lines.push(`<p style="font-weight:bold;font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">PAYMENT</p>`)
+      for (const p of receiptData.payments)
+        lines.push(row(fmtM(p.method), fmt2(p.amount)))
+      if (receiptData.changeAmount > 0)
+        lines.push(`<div style="display:flex;justify-content:space-between;font-weight:bold;margin:2px 0"><span>Change</span><span>${fmt2(receiptData.changeAmount)}</span></div>`)
+
+      lines.push(`<hr style="border:none;border-top:1px dashed #000;margin:8px 0 4px">`)
+      lines.push(`<p style="text-align:center;font-size:10px;margin-top:4px">${receiptData.receiptFooter ?? 'Thank you for your business!'}</p>`)
+
+      const html = lines.join('\n')
       const result = await window.api.invoke<IpcResult<{ printed: boolean }>>('print:html', { html })
       if (!result.success) setPrintError(result.error ?? 'Print failed.')
     } catch (err) {
@@ -56,9 +116,6 @@ export default function ReceiptPreviewModal({ receiptData, onClose }: ReceiptPre
     } finally {
       setIsPrinting(false)
     }
-
-    // Also notify main process receipt handler (fire and forget)
-    window.api.invoke<IpcResult<{ queued?: boolean }>>('receipt:print', { receiptData }).catch(() => {})
   }, [receiptData])
 
   if (!receiptData) return null
@@ -100,7 +157,6 @@ export default function ReceiptPreviewModal({ receiptData, onClose }: ReceiptPre
         {/* Receipt body — styled like a thermal receipt */}
         <div className="flex-1 overflow-y-auto min-h-0 bg-white">
           <div
-            ref={receiptRef}
             style={{ fontFamily: "'Courier New', monospace", fontSize: '11px', color: '#000', padding: '12px 14px', width: '100%' }}
           >
             {/* Header */}

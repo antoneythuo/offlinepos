@@ -111,6 +111,7 @@ export interface CartItem {
   productName: string
   sku: string
   quantity: number
+  stockQuantity: number   // available stock — used to cap cart quantity
   unitPrice: number
   costPrice?: number
   discountType: 'none' | 'percent' | 'fixed'

@@ -1,7 +1,7 @@
 // print:html IPC handler
 // Creates a hidden BrowserWindow, loads receipt HTML, triggers native print dialog
 
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow } from 'electron'
 import { registerHandler } from '../../src/ipc/registerHandler'
 
 export function registerPrintHandlers(): void {
@@ -27,27 +27,30 @@ export function registerPrintHandlers(): void {
   @media print { @page { size:80mm auto; margin:0; } body { width:80mm; } }
 </style></head><body>${html}</body></html>`
 
-      win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(fullHtml))
+      let printed = false
 
       win.webContents.once('did-finish-load', () => {
-        win.webContents.print(
-          { silent: false, printBackground: true, deviceName: '' },
-          (success, errorType) => {
-            win.close()
-            if (success) {
-              resolve({ printed: true })
-            } else {
-              // User cancelled or printer error — not a fatal error
-              resolve({ printed: false })
+        if (printed) return
+        printed = true
+
+        // Small delay to ensure the renderer has fully painted before printing
+        setTimeout(() => {
+          win.webContents.print(
+            { silent: false, printBackground: true, deviceName: '' },
+            (success) => {
+              win.destroy()
+              resolve({ printed: success })
             }
-          }
-        )
+          )
+        }, 200)
       })
 
       win.webContents.once('did-fail-load', () => {
-        win.close()
+        win.destroy()
         reject(new Error('Failed to load receipt for printing'))
       })
+
+      win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(fullHtml))
     })
   })
 }

@@ -137,6 +137,7 @@ export default function ProductSearchPanel(): React.ReactElement {
         productName: product.name,
         sku: product.sku,
         quantity: 1,
+        stockQuantity: product.quantityOnHand,
         unitPrice: product.sellingPrice,
         costPrice: product.costPrice,
         discountType: 'none',

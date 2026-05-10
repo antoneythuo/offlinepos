@@ -89,9 +89,13 @@ function CartLineItem({ item, onQuantityChange, onPriceChange, onRemove }: CartL
           <input
             type="number"
             min={0}
+            max={item.stockQuantity}
             step={1}
             value={item.quantity}
-            onChange={(e) => onQuantityChange(item.productId, parseInt(e.target.value, 10) || 0)}
+            onChange={(e) => {
+              const val = parseInt(e.target.value, 10) || 0
+              onQuantityChange(item.productId, Math.min(val, item.stockQuantity))
+            }}
             aria-label={`Quantity for ${item.productName}`}
             style={{ MozAppearance: 'textfield' }}
             className="w-12 h-11 !min-h-0 text-center text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-x border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
@@ -99,8 +103,9 @@ function CartLineItem({ item, onQuantityChange, onPriceChange, onRemove }: CartL
           <button
             type="button"
             onClick={() => onQuantityChange(item.productId, item.quantity + 1)}
+            disabled={item.quantity >= item.stockQuantity}
             aria-label="Increase quantity"
-            className="!min-w-[36px] !min-h-[44px] w-9 h-11 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none text-xl font-medium select-none"
+            className="!min-w-[36px] !min-h-[44px] w-9 h-11 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none text-xl font-medium select-none disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:bg-transparent"
           >
             +
           </button>

@@ -23,6 +23,7 @@ function makeItem(overrides: Partial<CartItem> = {}): CartItem {
     productName: 'Test Product',
     sku: 'SKU-001',
     quantity: 1,
+    stockQuantity: 100,
     unitPrice: 100,
     discountType: 'none',
     discountValue: 0,

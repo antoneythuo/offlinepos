@@ -43,14 +43,14 @@ export const useCartStore = create<CartState>()((set, get) => ({
 
     let updatedItems: CartItem[]
     if (existingIndex >= 0) {
-      // Increment quantity if product already in cart
-      updatedItems = items.map((item, idx) =>
-        idx === existingIndex
-          ? { ...item, quantity: item.quantity + newItem.quantity }
-          : item
-      )
+      // Increment quantity but cap at stockQuantity
+      updatedItems = items.map((item, idx) => {
+        if (idx !== existingIndex) return item
+        const newQty = Math.min(item.quantity + newItem.quantity, item.stockQuantity)
+        return { ...item, quantity: newQty }
+      })
     } else {
-      updatedItems = [...items, newItem]
+      updatedItems = [...items, { ...newItem, quantity: Math.min(newItem.quantity, newItem.stockQuantity) }]
     }
 
     set({
@@ -61,10 +61,12 @@ export const useCartStore = create<CartState>()((set, get) => ({
 
   updateQuantity: (productId, quantity) => {
     const { items, receiptDiscount } = get()
+    const item = items.find((i) => i.productId === productId)
+    const capped = item ? Math.min(quantity, item.stockQuantity) : quantity
     const updatedItems =
-      quantity <= 0
+      capped <= 0
         ? items.filter((i) => i.productId !== productId)
-        : items.map((i) => (i.productId === productId ? { ...i, quantity } : i))
+        : items.map((i) => (i.productId === productId ? { ...i, quantity: capped } : i))
 
     set({
       items: updatedItems,
